@@ -17,6 +17,16 @@
 #  location: "./custom-snapshot.yaml"
 resolver: lts-6.14
 
+
+docker:
+  enable: true # warning!
+
+# stack image container
+image:
+  container:
+    name: use-haskell
+    base: fpco/stack-run
+
 # User packages to be built.
 # Various formats can be used as shown in the example below.
 #
@@ -43,7 +53,7 @@ packages:
       commit: e078def65d0dee1ea7e3205f445e47d5937851f3
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
-extra-deps: [servant-client-0.9.1.1, servant-0.9.1.1, servant-server-0.9.1.1, http-api-data-0.3.2]
+extra-deps: [git-embed-0.1.0,  github-0.15.0, servant-client-0.9.1.1, servant-0.9.1.1, servant-server-0.9.1.1, http-api-data-0.3.2]
 
 # Override default flag values for local packages and extra-deps
 flags: {}
@@ -68,13 +78,3 @@ extra-package-dbs: []
 #
 # Allow a newer minor version of GHC than the snapshot specifies
 # compiler-check: newer-minor
-
-docker:
-  enable: true
-
-image:
-  container:
-    # New image will be called registry-account-name/myapp - adjust as required for your registry (see step 3)
-    name: mcnaugho/test-server
-    # Base it on the stack-run images
-    base: fpco/stack-run

@@ -1,5 +1,5 @@
-thing:
-  image: mcnaugho/thing
+test-server:
+  image: mcnaugho/test-server
   environment:
     # The start of active environment variables. Set as needed.
     - MONGODB_IP=database
@@ -8,7 +8,7 @@ thing:
     - LOG_LEVEL=DEBUG
     # - https_proxy=http://www-proxy.scss.tcd.ie:8080
     # - http_proxy=http://www-proxy.scss.tcd.ie:8080
-  command: /usr/local/bin/thing-exe
+  command: /usr/local/bin/test-server-exe
   ports:
     - "8080:8080"
   links:

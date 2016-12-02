@@ -1,1 +1,4 @@
 server/.stack-work
+api/.stack-work
+client/.stack-work
+scripts/node_modules
