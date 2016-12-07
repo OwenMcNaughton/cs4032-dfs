@@ -36,15 +36,10 @@ resolver: lts-6.14
 # non-dependency (i.e. a user package), and its test suites and benchmarks
 # will not be run. This is useful for tweaking upstream packages.
 packages:
-  - '.'
-  - ./../api
-  - ./../common
-  - location:
-      git: https://github.com/Palmik/bson-generic.git
-      commit: e078def65d0dee1ea7e3205f445e47d5937851f3
+- '.'
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
-extra-deps: [servant-client-0.9.1.1, servant-0.9.1.1, servant-server-0.9.1.1, http-api-data-0.3.2]
+extra-deps: []
 
 # Override default flag values for local packages and extra-deps
 flags: {}
@@ -69,13 +64,3 @@ extra-package-dbs: []
 #
 # Allow a newer minor version of GHC than the snapshot specifies
 # compiler-check: newer-minor
-
-docker:
-  enable: true
-
-image:
-  container:
-    # New image will be called registry-account-name/myapp - adjust as required for your registry (see step 3)
-    name: mcnaugho/test-server
-    # Base it on the stack-run images
-    base: fpco/stack-run
