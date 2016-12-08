@@ -26,6 +26,8 @@ library
                      , use-haskell-api
                      , transformers
                      , mongoDB
+                     , time
+                     , random
   default-language:    Haskell2010
 
 executable auth-exe

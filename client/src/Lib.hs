@@ -28,46 +28,38 @@ whiteCode = setSGRCode [SetConsoleIntensity BoldIntensity , SetColor Foreground 
 blueCode  = setSGRCode [SetConsoleIntensity BoldIntensity , SetColor Foreground Vivid Blue]
 resetCode = setSGRCode [Reset]
 
-
-reportExceptionOr act b =  b >>= \ b' ->
+reportExceptionOr act b pass =  b >>= \ b' ->
   case b' of
      Left err -> putStrLn $ "Call failed with error: " ++ show err
-     Right b'' ->  act b''
+     Right b'' ->  act b'' pass
 
-class PrintResponse a where
-  resp :: Show a => a -> String
+class ProcessResponse a where
+  processResponse :: a -> String -> IO()
 
-instance PrintResponse ResponseData where
-  resp r = "Response is a single value: " ++ response r
+instance ProcessResponse Token where
+  processResponse r p = do
+    putStrLn $ show r
+    putStrLn ("SessionKey: " ++ (xcrypt (sessionKey r) p))
+    putStrLn ("Encrypted-ticket: " ++ (xcrypt (encryptedTicket r) p))
 
-instance PrintResponse [Message] where
-  resp [] = "No messages."
-  resp [x] = "Response is a single message: " ++ message x
-  resp rs = "Response is an array with messages: " ++ (intercalate ", " $ map message rs)
+instance ProcessResponse Bool where
+  processResponse r p = do
+    putStrLn "tytyt!"
 
-instance PrintResponse [ResponseData] where
-  resp rs = "Response is an array with values: " ++ (intercalate ", " $ map response rs)
+instance ProcessResponse ResponseData where
+  processResponse r p = do
+    putStrLn "echo!"
 
-instance PrintResponse Bool where
-  resp True =  "Response is a boolean : Totally!"
-  resp False = "Response is a boolean : Like No Way!"
+instance ProcessResponse [Message] where
+  processResponse r p = do
+    putStrLn "adsdsa!"
 
-doCall f h p = reportExceptionOr (putStrLn . resp) (SC.runClientM f =<< env h p)
-
-doEcho :: String -> Maybe String -> Maybe String -> IO ()
-doEcho s = doCall $ echo $ Just s
-
-doStoreMessage :: String -> String -> Maybe String -> Maybe String -> IO ()
-doStoreMessage n m  = doCall $ storeMessage $ Message n m
-
-doSearchMessage :: String -> Maybe String -> Maybe String -> IO ()
-doSearchMessage s  = doCall $ searchMessage $ Just s
-
-doPerformRestCall :: Maybe String -> Maybe String -> Maybe String -> IO ()
-doPerformRestCall s  =  doCall $ performRestCall s
+doCall pass f h p = do
+  let reply = (SC.runClientM f =<< env h p)
+  reportExceptionOr processResponse reply pass
 
 doLogin :: String -> String -> Maybe String -> Maybe String -> IO ()
-doLogin u p = doCall $ login $ LoginRequest u (xcrypt loginRequestMessage p)
+doLogin u p = doCall p (login (LoginRequest u (xcrypt loginRequestMessage p)))
 
 someFunc :: IO ()
 someFunc = do
@@ -79,31 +71,7 @@ opts = do
 
   return $ info (   helper
                 <*> subparser
-                       (  command "echo"
-                                  (withInfo ( doEcho
-                                          <$> argument str (metavar "message")
-                                          <*> serverIpOption
-                                          <*> serverPortOption) "Uppercase a message" )
-                       <> command "store-message"
-                                  (withInfo ( doStoreMessage
-                                          <$> argument str (metavar "Name")
-                                          <*> argument str (metavar "Message")
-                                          <*> serverIpOption
-                                          <*> serverPortOption) "Store a message on the remote server." )
-                       <> command "search-message"
-                                  (withInfo ( doSearchMessage
-                                          <$> argument str (metavar "Name")
-                                          <*> serverIpOption
-                                          <*> serverPortOption) "Search for messages on the remote server." )
-                       <> command "rest-call"
-                                   (withInfo ( doPerformRestCall
-                                           <$> optional (strOption ( long "search"
-                                                                  <> short 's'
-                                                                  <> help "The search string for the hackage call."))
-                                           <*> serverIpOption
-                                           <*> serverPortOption) "Do a hackage rest call from the remote server." )
-
-                       <> command "login"
+                       ( command "login"
                                    (withInfo ( doLogin
                                            <$> argument str (metavar "username")
                                            <*> argument str (metavar "password")

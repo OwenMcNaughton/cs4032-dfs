@@ -14,6 +14,8 @@ module Lib
 import Control.Monad.IO.Class
 import Data.Aeson
 import Data.Aeson.TH
+import           Data.Time.Clock.POSIX        (getPOSIXTime)
+import           Data.Time.Clock              (UTCTime(..), getCurrentTime)
 import Network.Wai
 import Network.Wai.Handler.Warp
 import Servant
@@ -21,6 +23,7 @@ import UseHaskellAPI
 import Common
 import Database.MongoDB
 import Data.Bson.Generic
+import System.Random
 
 startApp :: IO ()
 startApp = withLogging $ \ aplogger -> do
@@ -35,7 +38,7 @@ startApp = withLogging $ \ aplogger -> do
   runSettings settings app
 
 app :: Application
-app = serve api server
+app = serve api Lib.server
 
 api :: Proxy AuthAPI
 api = Proxy
@@ -44,18 +47,26 @@ server :: Server AuthAPI
 server = login
 
   where
-    login :: LoginRequest -> Handler ResponseData
+    login :: LoginRequest -> Handler Token
     login lrq@(LoginRequest user req) = liftIO $ do
       warnLog $ "login request for " ++ show user
       pass <- (withMongoDbConnection $ findOne $ select ["name" =: show user] "USERS")
       case pass of
         Nothing -> do
-          return $ ResponseData $ "user not found"
+          return $ Token False "" "" 0 ""
         Just p -> do
-          let decrypted_msg = xcrypt req (trimPass (getMongoString "pass" p))
-          warnLog decrypted_msg
+          let password = trimPass (getMongoString "pass" p)
+          let decrypted_msg = xcrypt req password
+          warnLog (req ++ "   decrypts to  " ++ decrypted_msg)
           case decrypted_msg == loginRequestMessage of
             True -> do
-              return $ ResponseData $ "you're logged in!"
+              sessionKey <- randomRIO (0, 100000 :: Int)
+              let encryptedTicket = xcrypt (show sessionKey) authServerSecret
+              let encryptedSessionKey = xcrypt (show sessionKey) password
+              let doublyEncryptedTicket = xcrypt encryptedTicket password
+              warnLog ("SessionKey: " ++ (show sessionKey))
+              warnLog ("Ticket: " ++ (show encryptedTicket))
+              time <- getPOSIXTime
+              return $ Token True doublyEncryptedTicket encryptedSessionKey ((round time) + 3600) "server111"
             False ->
-              return $ ResponseData $ "that's not the right password"
+              return $ Token False "" "" 0 ""

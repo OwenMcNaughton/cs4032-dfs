@@ -24,7 +24,8 @@ library
                        resourcet,
                        transformers,
                        mongoDB,
-                       wai-logger
+                       wai-logger,
+                       unix-time
   default-language:    Haskell2010
 
 executable common-exe

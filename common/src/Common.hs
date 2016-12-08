@@ -15,9 +15,11 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Resource
 import           Data.Bits
 import           Data.Char
-import           Data.Time.Clock              (UTCTime, getCurrentTime)
+import           Data.Time.Clock.POSIX
+import           Data.Time.Clock              (UTCTime(..), getCurrentTime)
 import           Data.Time.Format             (defaultTimeLocale, formatTime)
 import           Data.Text                    (pack, unpack)
+import           Data.UnixTime
 import           Database.MongoDB
 import           Network.Wai.Logger
 import           System.Environment           (getArgs, getProgName, lookupEnv, setEnv)
@@ -97,6 +99,12 @@ xcrypt msg key = zipWith (\a b -> chr $ xor (ord a) (ord b)) (cycle key) msg
 
 loginRequestMessage :: String
 loginRequestMessage = "Can I log in please?"
+
+authServerSecret :: String
+authServerSecret = "Only the auth server and the directory server know this"
+
+ticket :: String
+ticket = "Hello directory server, this is an authorized request"
 
 -- Extract the string value of mongodb field
 getMongoString :: Label -> Document -> String
