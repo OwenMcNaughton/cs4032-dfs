@@ -8,6 +8,8 @@ module Lib
     ) where
 
 import           Control.Monad                      (join, when)
+import           Data.Bits
+import           Data.Char
 import           Data.List
 import           Git.Embed
 import           Network.HTTP.Client                (defaultManagerSettings,
@@ -19,6 +21,7 @@ import           System.Console.ANSI
 import           System.Environment
 import           UseHaskellAPI
 import           UseHaskellAPIClient
+import           Common
 
 redCode   = setSGRCode [SetConsoleIntensity BoldIntensity , SetColor Foreground Vivid Red]
 whiteCode = setSGRCode [SetConsoleIntensity BoldIntensity , SetColor Foreground Vivid White]
@@ -63,6 +66,9 @@ doSearchMessage s  = doCall $ searchMessage $ Just s
 doPerformRestCall :: Maybe String -> Maybe String -> Maybe String -> IO ()
 doPerformRestCall s  =  doCall $ performRestCall s
 
+doLogin :: String -> String -> Maybe String -> Maybe String -> IO ()
+doLogin u p = doCall $ login $ LoginRequest u (xcrypt loginRequestMessage p)
+
 someFunc :: IO ()
 someFunc = do
   join $ execParser =<< opts
@@ -95,7 +101,14 @@ opts = do
                                                                   <> short 's'
                                                                   <> help "The search string for the hackage call."))
                                            <*> serverIpOption
-                                           <*> serverPortOption) "Do a hackage rest call from the remote server." )))
+                                           <*> serverPortOption) "Do a hackage rest call from the remote server." )
+
+                       <> command "login"
+                                   (withInfo ( doLogin
+                                           <$> argument str (metavar "username")
+                                           <*> argument str (metavar "password")
+                                           <*> serverIpOption
+                                           <*> serverPortOption) "login to the auth server" )))
              (  fullDesc
              <> progDesc (progName ++ " is a simple test client for the use-haskell service." ++
                           " Try " ++ whiteCode ++ progName ++ " --help " ++ resetCode ++ " for more information. To " ++

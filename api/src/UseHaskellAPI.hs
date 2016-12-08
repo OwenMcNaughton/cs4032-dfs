@@ -28,6 +28,10 @@ data Message = Message { name    :: String
                        , message :: String
                        } deriving (Show, Generic, FromJSON, ToJSON, ToBSON, FromBSON)
 
+data LoginRequest = LoginRequest { user :: String
+                                 , request :: String
+                                 } deriving (Show, Generic, FromJSON, ToJSON, ToBSON, FromBSON)
+
 deriving instance FromBSON String  -- we need these as BSON does not provide
 deriving instance ToBSON   String
 
@@ -51,3 +55,5 @@ type API = "echo"                       :> QueryParam "message" String :> Get '[
       :<|> "storeMessage"               :> ReqBody '[JSON] Message  :> Post '[JSON] Bool
       :<|> "searchMessage"              :> QueryParam "name" String :> Get '[JSON] [Message]
       :<|> "performRESTCall"            :> QueryParam "filter" String  :> Get '[JSON] ResponseData
+
+type AuthAPI = "login"                  :> ReqBody '[JSON] LoginRequest :> Post '[JSON] ResponseData

@@ -2,4 +2,5 @@ server/.stack-work
 api/.stack-work
 client/.stack-work
 common/.stack-work
+auth/.stack-work
 scripts/node_modules

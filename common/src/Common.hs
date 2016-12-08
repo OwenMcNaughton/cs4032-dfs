@@ -13,6 +13,8 @@ module Common where
 import           Control.Monad                (when)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Resource
+import           Data.Bits
+import           Data.Char
 import           Data.Time.Clock              (UTCTime, getCurrentTime)
 import           Data.Time.Format             (defaultTimeLocale, formatTime)
 import           Data.Text                    (pack, unpack)
@@ -88,3 +90,18 @@ withLogging act = withStdoutLogger $ \aplogger -> do
                                   "ERROR"   -> ERROR
                                   _         -> DEBUG)
   act aplogger
+
+-- 'encrypts' a msg with a key. works in both directions.
+xcrypt :: String -> String -> String
+xcrypt msg key = zipWith (\a b -> chr $ xor (ord a) (ord b)) (cycle key) msg
+
+loginRequestMessage :: String
+loginRequestMessage = "Can I log in please?"
+
+-- Extract the string value of mongodb field
+getMongoString :: Label -> Document -> String
+getMongoString label = typed . (valueAt label)
+
+-- Remove quotes from a string...
+trimPass :: String -> String
+trimPass pass = take ((length pass) - 2) $ drop 1 $ pass
