@@ -16,16 +16,33 @@ import           Data.Time.Clock              (UTCTime(..))
 import           GHC.Generics
 import           Servant
 
+data User = User { name :: String
+                 , pass :: String
+                 } deriving (Show, Generic, FromJSON, ToJSON, ToBSON, FromBSON)
+
 data LoginRequest = LoginRequest { user :: String
                                  , request :: String
                                  } deriving (Show, Generic, FromJSON, ToJSON, ToBSON, FromBSON)
 
 data Token = Token { success :: Bool
-                   , encryptedTicket :: String
-                   , sessionKey :: String
+                   , ticket :: String
+                   , encSessionKey :: String
+                   , encEncSessionKey :: String
                    , timeout :: Int
-                   , server :: String
+                   , serverHost :: String
+                   , serverPort :: String
                    } deriving (Show, Generic, FromJSON, ToJSON, ToBSON, FromBSON)
+
+data DownloadRequest = DownloadRequest { encUser :: String  -- encrypted with session key
+                                       , secretTicket :: String -- encrypted with auth secret key
+                                       , encSessionkey :: String  -- encrypted with auth secret key
+                                       , encFullPath :: String  -- encrypted with session key
+                                       , timeout2 :: Int
+                                       } deriving (Show, Generic, FromJSON, ToJSON, ToBSON, FromBSON)
+
+data DownloadResponse = DownloadResponse { encStatus :: String  -- encrypted with session key
+                                         , encContents :: String  -- encrypted with session key
+                                         } deriving (Show, Generic, FromJSON, ToJSON, ToBSON, FromBSON)
 
 deriving instance FromBSON String
 deriving instance ToBSON   String
@@ -35,3 +52,5 @@ deriving instance FromBSON Int
 deriving instance ToBSON   Int
 
 type AuthAPI = "login" :> ReqBody '[JSON] LoginRequest :> Post '[JSON] Token
+
+type DirAPI = "download" :> ReqBody '[JSON] DownloadRequest :> Post '[JSON] DownloadResponse

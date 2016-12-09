@@ -18,3 +18,11 @@ authRestAPI = Proxy
 login :: LoginRequest -> ClientM Token
 
 (login) = client authRestAPI
+
+
+dirRestAPI :: Proxy DirAPI
+dirRestAPI = Proxy
+
+download :: DownloadRequest -> ClientM DownloadResponse
+
+(download) = client dirRestAPI

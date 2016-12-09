@@ -7,6 +7,7 @@
 {-# LANGUAGE TemplateHaskell      #-}
 {-# LANGUAGE TypeOperators        #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+
 module Lib
     ( startApp
     ) where
@@ -34,7 +35,7 @@ startApp = withLogging $ \ aplogger -> do
       ["name" =: show "owen", "pass" =: show "qwerty"],
       ["name" =: show "paul", "pass" =: show "1234"]]
 
-  let settings = setPort 8081 $ setLogger aplogger defaultSettings
+  let settings = setPort (read authPort :: Int) $ setLogger aplogger defaultSettings
   runSettings settings app
 
 app :: Application
@@ -53,7 +54,7 @@ server = login
       pass <- (withMongoDbConnection $ findOne $ select ["name" =: show user] "USERS")
       case pass of
         Nothing -> do
-          return $ Token False "" "" 0 ""
+          return $ Token False "" "" "" 0 "" ""
         Just p -> do
           let password = trimPass (getMongoString "pass" p)
           let decrypted_msg = xcrypt req password
@@ -61,12 +62,10 @@ server = login
           case decrypted_msg == loginRequestMessage of
             True -> do
               sessionKey <- randomRIO (0, 100000 :: Int)
-              let encryptedTicket = xcrypt (show sessionKey) authServerSecret
-              let encryptedSessionKey = xcrypt (show sessionKey) password
-              let doublyEncryptedTicket = xcrypt encryptedTicket password
-              warnLog ("SessionKey: " ++ (show sessionKey))
-              warnLog ("Ticket: " ++ (show encryptedTicket))
+              let encSessionKey = xcrypt (show sessionKey) password
+              let encEncSessionKey = xcrypt (xcrypt (show sessionKey) authServerSecret) password
+              let tckt = xcrypt (xcrypt expectedTicket authServerSecret) password
               time <- getPOSIXTime
-              return $ Token True doublyEncryptedTicket encryptedSessionKey ((round time) + 3600) "server111"
+              return $ Token True tckt encSessionKey encEncSessionKey ((round time) + 3600) "localhost" dirPort
             False ->
-              return $ Token False "" "" 0 ""
+              return $ Token False "" "" "" 0 "" ""

@@ -103,8 +103,8 @@ loginRequestMessage = "Can I log in please?"
 authServerSecret :: String
 authServerSecret = "Only the auth server and the directory server know this"
 
-ticket :: String
-ticket = "Hello directory server, this is an authorized request"
+expectedTicket :: String
+expectedTicket = "Hello directory server, this is an authorized request"
 
 -- Extract the string value of mongodb field
 getMongoString :: Label -> Document -> String
@@ -117,3 +117,12 @@ getMongoInt label = typed . (valueAt label)
 -- Remove quotes from a string...
 trimPass :: String -> String
 trimPass pass = take ((length pass) - 2) $ drop 1 $ pass
+
+authPort :: String
+authPort = "8081"
+
+dirPort :: String
+dirPort = "8082"
+
+authHost :: String
+authHost = "localhost"

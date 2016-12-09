@@ -42,41 +42,77 @@ class ProcessResponse a where
 
 instance ProcessResponse Token where
   processResponse r p = do
-    putStrLn $ show r
-    let ticket = (xcrypt (encryptedTicket r) p)
-    let key = (xcrypt (sessionKey r) p)
-    putStrLn ("SessionKey: " ++ key)
-    putStrLn ("Encrypted-ticket: " ++ ticket)
-    let t = Token True ticket key (timeout r) (server r)
-    withMongoDbConnection $ Database.MongoDB.delete (select [] "DB")
-    withMongoDbConnection $ upsert (select [] "DB") (toBSON t)
+    warnLog $ show r
+    let encTicket = (xcrypt (ticket r) p)
+    let key = (xcrypt (encSessionKey r) p)
+    let encKey = (xcrypt (encEncSessionKey r) p)
+    let t = Token True encTicket key encKey (timeout r) (serverHost r) (serverPort r)
+    withMongoDbConnection $ Database.MongoDB.delete (select [] "TOKEN")
+    withMongoDbConnection $ upsert (select [] "TOKEN") (toBSON t)
 
-doCall pass f h n = do
-  let reply = (SC.runClientM f =<< env h n)
+instance ProcessResponse DownloadResponse where
+  processResponse r p = do
+    putStrLn $ show r
+
+doCall pass f h p = do
+  let reply = (SC.runClientM f =<< env h p)
   reportExceptionOr processResponse reply pass
 
-doLogin :: String -> String -> Maybe String -> Maybe String -> IO ()
-doLogin u p = doCall p (login (LoginRequest u (xcrypt loginRequestMessage p)))
+doLogin :: IO ()
+doLogin = do
+  user <- (withMongoDbConnection $ findOne (select [] "USER"))
+  case user of
+    Nothing -> do
+      putStrLn "Provide a username and password as cmd line args"
+    Just u -> do
+      let name = (getMongoString "name" u)
+      let pass = (getMongoString "pass" u)
+      let h = authHost
+      let p = authPort
+      doCall pass (login (LoginRequest name (xcrypt loginRequestMessage pass))) h p
+
+doDownload :: String -> IO ()
+doDownload fn = do
+  user <- (withMongoDbConnection $ findOne (select [] "USER"))
+  case user of
+    Nothing -> do
+      putStrLn "Provide a username and password as cmd line args, and then login"
+    Just u -> do
+      let name = (getMongoString "name" u)
+      token <- (withMongoDbConnection $ findOne (select [] "TOKEN"))
+      case token of
+        Nothing -> do
+          putStrLn "Didn't find an access token, did you login?"
+        Just t -> do
+          let h = (getMongoString "serverHost" t)
+          let p = (getMongoString "serverPort" t)
+          let ticket = (getMongoString "ticket" t)
+          let encSessionKey = (getMongoString "encEncSessionKey" t)
+          let timeout3 = (getMongoInt "timeout" t)
+          let sessionKey = (getMongoString "encSessionKey" t)
+          let encUser = xcrypt name sessionKey
+          let encFullPath = xcrypt fn sessionKey
+          doCall "" (download (DownloadRequest encUser ticket encSessionKey encFullPath timeout3)) h p
+
+setupUser :: IO ()
+setupUser = do
+  args <- getArgs
+  let user = User (head (drop 0 args)) (head (drop 1 args))
+  withMongoDbConnection $ Database.MongoDB.delete (select [] "USER")
+  withMongoDbConnection $ upsert (select [] "USER") (toBSON user)
 
 prompt :: IO ()
 prompt = do
-  args <- getArgs
-  let host = (head (drop 0 args))
-  let port = (head (drop 1 args))
+  setupUser
   putStrLn "Ready."
   line <- getLine
   if isPrefixOf "login" line
     then do
-      let command = splitOn " " line
-      doLogin (head (drop 1 command)) (head (drop 2 command)) (Just host) (Just port)
+      doLogin
   else if isPrefixOf "download" line
     then do
-      token <- (withMongoDbConnection $ findOne (select [] "DB"))
-      case token of
-        Nothing ->
-          putStrLn "you need to login first"
-        Just t -> do
-          putStrLn (getMongoString "server" t)
+      let command = splitOn " " line
+      doDownload (head (drop 1 command))
   else
     putStrLn "noono"
   prompt
@@ -84,39 +120,10 @@ prompt = do
 someFunc :: IO ()
 someFunc = do
   setEnv "MONGODB_IP" "localhost"
+  setEnv "MONGODB_DATABASE" "USEHASKELLDB"
   prompt
 
-env :: Maybe String -> Maybe String -> IO SC.ClientEnv
-env host port = SC.ClientEnv <$> newManager defaultManagerSettings
-                                               <*> (SC.BaseUrl <$> pure SC.Http
-                                                               <*> (host <?> usehaskellHost)
-                                                               <*> (read <$> (port <?> usehaskellPort))
-                                                               <*> pure "")
- where
-   (<?>) :: Maybe a -> IO a -> IO a
-   h <?> f = case h of
-     Just hst -> return hst
-     Nothing  -> f
-
-   usehaskellHost :: IO String
-   usehaskellHost = devEnv "USE_HASKELL_HOST" id "localhost" True
-
-   usehaskellPort :: IO String
-   usehaskellPort = devEnv "USE_HASKELL_PORT" id "8080" True
-
-   devEnv :: Show a
-          => String        -- Environment Variable name
-          -> (String -> a)  -- function to process variable string (set as 'id' if not needed)
-          -> a             -- default value to use if environment variable is not set
-          -> Bool          -- True if we should warn if environment variable is not set
-          -> IO a
-   devEnv env fn def warn = lookupEnv env >>= \ result ->
-     case result of
-         Just s  -> return $ fn s
-         Nothing -> warn' warn env def
-
-    where warn' :: Show b => Bool -> String -> b -> IO b
-          warn' wn e s =  do
-            when wn $ putStrLn $ "Environment variable: " ++ e ++
-                                    " is not set. Defaulting to " ++ (show s)
-            return s
+env :: String -> String -> IO SC.ClientEnv
+env host port = do
+  manager <- newManager defaultManagerSettings
+  return (SC.ClientEnv manager (SC.BaseUrl SC.Http host (read port :: Int) ""))

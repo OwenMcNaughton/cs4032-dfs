@@ -69,3 +69,13 @@ extra-package-dbs: []
 #
 # Allow a newer minor version of GHC than the snapshot specifies
 # compiler-check: newer-minor
+
+docker:
+  enable: true
+
+image:
+  container:
+    # New image will be called registry-account-name/myapp - adjust as required for your registry (see step 3)
+    name: mcnaugho/dir
+    # Base it on the stack-run images
+    base: fpco/stack-run
