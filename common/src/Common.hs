@@ -51,9 +51,6 @@ defEnv env fn def doWarn = lookupEnv env >>= \ e -> case e of
                                       " is not set. Defaulting to " ++ (show def))
         return def
 
-mongoDbIp :: IO String
-mongoDbIp = defEnv "MONGODB_IP" id "database" True
-
 withMongoDbConnection :: Action IO a -> IO a
 withMongoDbConnection act  = do
   ip <- mongoDbIp
@@ -72,6 +69,9 @@ drainCursor cur = drainCursor' cur []
       if null batch
         then return res
         else drainCursor' cur (res ++ batch)
+
+mongoDbIp :: IO String
+mongoDbIp = defEnv "MONGODB_IP" id "database" True
 
 mongoDbPort :: IO Integer
 mongoDbPort = defEnv "MONGODB_PORT" read 27017 False
@@ -109,6 +109,10 @@ ticket = "Hello directory server, this is an authorized request"
 -- Extract the string value of mongodb field
 getMongoString :: Label -> Document -> String
 getMongoString label = typed . (valueAt label)
+
+-- Extract the string value of mongodb field
+getMongoInt :: Label -> Document -> Int
+getMongoInt label = typed . (valueAt label)
 
 -- Remove quotes from a string...
 trimPass :: String -> String

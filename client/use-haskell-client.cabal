@@ -27,6 +27,10 @@ library
                      , ansi-terminal
                      , git-embed
                      , common
+                     , split
+                     , containers
+                     , mongoDB
+                     , bson-generic
   default-language:    Haskell2010
 
 executable use-haskell-client-exe

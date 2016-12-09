@@ -1,6 +1,7 @@
 server
 api/.stack-work
 client/.stack-work
+client/.mongo
 common/.stack-work
 auth/.stack-work
 scripts/node_modules

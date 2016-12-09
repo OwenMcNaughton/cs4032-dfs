@@ -11,6 +11,8 @@ import           Control.Monad                      (join, when)
 import           Data.Bits
 import           Data.Char
 import           Data.List
+import           Data.List.Split
+import Data.Map(Map, keys, fromList, (!))
 import           Git.Embed
 import           Network.HTTP.Client                (defaultManagerSettings,
                                                      newManager)
@@ -22,6 +24,8 @@ import           System.Environment
 import           UseHaskellAPI
 import           UseHaskellAPIClient
 import           Common
+import           Database.MongoDB
+import           Data.Bson.Generic
 
 redCode   = setSGRCode [SetConsoleIntensity BoldIntensity , SetColor Foreground Vivid Red]
 whiteCode = setSGRCode [SetConsoleIntensity BoldIntensity , SetColor Foreground Vivid White]
@@ -34,76 +38,53 @@ reportExceptionOr act b pass =  b >>= \ b' ->
      Right b'' ->  act b'' pass
 
 class ProcessResponse a where
-  processResponse :: a -> String -> IO()
+  processResponse :: a -> String -> IO ()
 
 instance ProcessResponse Token where
   processResponse r p = do
     putStrLn $ show r
-    putStrLn ("SessionKey: " ++ (xcrypt (sessionKey r) p))
-    putStrLn ("Encrypted-ticket: " ++ (xcrypt (encryptedTicket r) p))
+    let ticket = (xcrypt (encryptedTicket r) p)
+    let key = (xcrypt (sessionKey r) p)
+    putStrLn ("SessionKey: " ++ key)
+    putStrLn ("Encrypted-ticket: " ++ ticket)
+    let t = Token True ticket key (timeout r) (server r)
+    withMongoDbConnection $ Database.MongoDB.delete (select [] "DB")
+    withMongoDbConnection $ upsert (select [] "DB") (toBSON t)
 
-instance ProcessResponse Bool where
-  processResponse r p = do
-    putStrLn "tytyt!"
-
-instance ProcessResponse ResponseData where
-  processResponse r p = do
-    putStrLn "echo!"
-
-instance ProcessResponse [Message] where
-  processResponse r p = do
-    putStrLn "adsdsa!"
-
-doCall pass f h p = do
-  let reply = (SC.runClientM f =<< env h p)
+doCall pass f h n = do
+  let reply = (SC.runClientM f =<< env h n)
   reportExceptionOr processResponse reply pass
 
 doLogin :: String -> String -> Maybe String -> Maybe String -> IO ()
 doLogin u p = doCall p (login (LoginRequest u (xcrypt loginRequestMessage p)))
 
+prompt :: IO ()
+prompt = do
+  args <- getArgs
+  let host = (head (drop 0 args))
+  let port = (head (drop 1 args))
+  putStrLn "Ready."
+  line <- getLine
+  if isPrefixOf "login" line
+    then do
+      let command = splitOn " " line
+      doLogin (head (drop 1 command)) (head (drop 2 command)) (Just host) (Just port)
+  else if isPrefixOf "download" line
+    then do
+      token <- (withMongoDbConnection $ findOne (select [] "DB"))
+      case token of
+        Nothing ->
+          putStrLn "you need to login first"
+        Just t -> do
+          putStrLn (getMongoString "server" t)
+  else
+    putStrLn "noono"
+  prompt
+
 someFunc :: IO ()
 someFunc = do
-  join $ execParser =<< opts
-
-opts :: IO (ParserInfo (IO ()))
-opts = do
-  progName <- getProgName
-
-  return $ info (   helper
-                <*> subparser
-                       ( command "login"
-                                   (withInfo ( doLogin
-                                           <$> argument str (metavar "username")
-                                           <*> argument str (metavar "password")
-                                           <*> serverIpOption
-                                           <*> serverPortOption) "login to the auth server" )))
-             (  fullDesc
-             <> progDesc (progName ++ " is a simple test client for the use-haskell service." ++
-                          " Try " ++ whiteCode ++ progName ++ " --help " ++ resetCode ++ " for more information. To " ++
-                          " see the details of any command, " ++  "try " ++ whiteCode ++ progName ++ " COMMAND --help" ++
-                          resetCode ++ ". The application supports bash completion. To enable, " ++
-                          "ensure you have bash-completion installed and enabled (see your OS for details), the " ++
-                          whiteCode ++ progName ++ resetCode ++
-                          " application in your PATH, and place the following in your ~/.bash_profile : " ++ whiteCode ++
-                          "source < (" ++ progName ++ " --bash-completion-script `which " ++ progName ++ "`)" ++
-                          resetCode ))
-
--- helpers to simplify the creation of command line options
-withInfo :: Parser a -> String -> ParserInfo a
-withInfo opts desc = info (helper <*> opts) $ progDesc desc
-
-
-serverIpOption :: Parser (Maybe String)
-serverIpOption = optional $ strOption ( long "ip"
-                                     <> short 'i'
-                                     <> metavar "IPADDRESS"
-                                     <> help "the ip address of the use-haskell service.")
-
-serverPortOption :: Parser (Maybe String)
-serverPortOption = optional $ strOption (  long "port"
-                                        <> short 'n'
-                                        <> metavar "PORT_NUMBER"
-                                        <> help "The port number of the use-haskell service.")
+  setEnv "MONGODB_IP" "localhost"
+  prompt
 
 env :: Maybe String -> Maybe String -> IO SC.ClientEnv
 env host port = SC.ClientEnv <$> newManager defaultManagerSettings
