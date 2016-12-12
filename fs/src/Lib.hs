@@ -32,28 +32,48 @@ import qualified Servant.API                        as SC
 import qualified Servant.Client                     as SC
 import Network.HTTP.Types.Status
 import Network.Wai.Logger
+import Network.HostName
+import System.Environment           (lookupEnv)
 
-reportExceptionOr act b aplogger =  b >>= \ b' ->
+reportExceptionOr act b =  b >>= \ b' ->
   case b' of
      Left err -> putStrLn $ "Call failed with error: " ++ show err
-     Right b'' ->  act b'' aplogger
+     Right b'' ->  act b''
 
 class ProcessResponse a where
- processResponse :: a -> ApacheLogger -> IO ()
+ processResponse :: a -> IO ()
 
 instance ProcessResponse Int where
-  processResponse r aplogger = do
+  processResponse r = do
     warnLog $ show r
-    let settings = setPort r $ setLogger aplogger defaultSettings
-    runSettings settings app
+
+taskScheduler :: Int -> IO ()
+taskScheduler delay = do
+  warnLog "Task scheduler operating."
+
+  fsid <- lookupEnv "fsid"
+  case fsid of
+    Nothing -> do
+      warnLog "no fsid env?"
+    Just e -> do
+      let f = fsRegister e
+      let reply = (SC.runClientM f =<< env "172.17.0.3" dirPort)
+      reportExceptionOr processResponse reply
+
+  threadDelay $ delay * 1000000
+  taskScheduler delay
 
 startApp :: IO ()
 startApp = withLogging $ \ aplogger -> do
 
   warnLog "Starting fs server"
 
-  let reply = (SC.runClientM fsRegister =<< env dirHost dirPort)
-  reportExceptionOr processResponse reply aplogger
+  createDirectoryIfMissing False "./files"
+
+  forkIO $ taskScheduler 5
+
+  let settings = setPort 8085 $ setLogger aplogger defaultSettings
+  runSettings settings app
 
 app :: Application
 app = serve api Lib.server
@@ -72,13 +92,24 @@ server = download :<|> upload
       if dlqTimeout > (round currentTime)
         then do
           let decID = xcrypt encDlqID authServerSecret
-          contents <- getDirectoryContents "."
-          warnLog (show contents)
-          return $ DownloadResponse "" ""
+          contents <- readFile ("files/" ++ decID)
+          warnLog contents
+          return $ DownloadResponse "Success!" (xcrypt contents sessionKey)
         else do
           warnLog "But his ticket timed out..."
           return $ DownloadResponse "Failure timeout" ""
 
     upload :: UploadRequest -> Handler UploadResponse
-    upload ulq@(UploadRequest encUlqID encUlqSessionkey ulqTimeout) = liftIO $ do
-      return $ UploadResponse ""
+    upload ulq@(UploadRequest encUlqID encUlqSessionkey ulqEncContents ulqTimeout) = liftIO $ do
+      let sessionKey = xcrypt encUlqSessionkey authServerSecret
+      currentTime <- getPOSIXTime
+      if ulqTimeout > (round currentTime)
+        then do
+          let decID = xcrypt encUlqID authServerSecret
+          let contents = xcrypt ulqEncContents sessionKey
+          writeFile ("files/" ++ decID) contents
+          return $ UploadResponse "Success!"
+        else do
+          warnLog "Ticket has timed out"
+          return $ UploadResponse "Failure timeout"
+      return $ UploadResponse "Success!"

@@ -142,10 +142,10 @@ myHashMod :: String -> Int -> Int
 myHashMod s m = (hash s) `mod` m
 
 fileServer :: Int -> (String, String)
-fileServer 0 = ("localhost", "8085")
-fileServer 1 = ("localhost", "8086")
-fileServer 2 = ("localhost", "8087")
-fileServer 3 = ("localhost", "8088")
+fileServer 0 = ("172.17.0.7", "8085")
+fileServer 1 = ("172.17.0.9", "8085")
+fileServer 2 = ("172.17.0.11", "8085")
+fileServer 3 = ("172.17.0.13", "8085")
 
 env :: String -> String -> IO SC.ClientEnv
 env host port = do

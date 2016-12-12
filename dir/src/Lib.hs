@@ -31,6 +31,12 @@ startApp = withLogging $ \ aplogger -> do
 
   warnLog "Starting dir server"
 
+  withMongoDbConnection $ insertMany "SERVERS" [
+      ["no" =: show "fs0", "host" =: show "172.17.0.7", "port" =: show "8085", "ready" := val False],
+      ["no" =: show "fs1", "host" =: show "172.17.0.9", "port" =: show "8085", "ready" := val False],
+      ["no" =: show "fs2", "host" =: show "172.17.0.11", "port" =: show "8085", "ready" := val False],
+      ["no" =: show "fs3", "host" =: show "172.17.0.13", "port" =: show "8085", "ready" := val False]]
+
   let settings = setPort (read dirPort :: Int) $ setLogger aplogger defaultSettings
   runSettings settings app
 
@@ -59,14 +65,19 @@ server = stat :<|> fsRegister
               case fileInfo of
                 Nothing -> do
                   let newFileID = myHash fullPath
-                  let nfServerNo = myHashMod fullPath 4
-                  let serverHostPort = fileServer nfServerNo
-                  let newFile = FileStat fullPath (show newFileID) nfServerNo (fst serverHostPort) (snd serverHostPort) user True
-                  withMongoDbConnection $ insert "FILES" (toBSON newFile)
-                  let encFileId = xcrypt (show newFileID) sessionKey
-                  let encHost = xcrypt (fst serverHostPort) sessionKey
-                  let encPort = xcrypt (show $ snd serverHostPort) sessionKey
-                  return $ StatResponse "Success! File created" encFullPath encHost encPort encFileId
+                  let nfServerNo = "fs" ++ (show (myHashMod fullPath 4))
+                  nfServer <- (withMongoDbConnection $ findOne $ select ["no" := val (show nfServerNo)] "SERVERS")
+                  case nfServer of
+                    Nothing -> do
+                      warnLog "uh oh"
+                      return $ StatResponse "" "" "" "" ""
+                    Just nfs -> do
+                      let newFile = FileStat fullPath (show newFileID) nfServerNo (getMongoString "host" nfs) (getMongoString "port" nfs) user True
+                      withMongoDbConnection $ insert "FILES" (toBSON newFile)
+                      let encFileId = xcrypt (show newFileID) authServerSecret
+                      let encHost = xcrypt (getMongoString "host" nfs) sessionKey
+                      let encPort = xcrypt (getMongoString "port" nfs) sessionKey
+                      return $ StatResponse "Success! File created" encFullPath encHost encPort encFileId
                 Just f -> do
                   let host' = xcrypt (getMongoString "fileServerHost" f) sessionKey
                   let port' = xcrypt (getMongoString "fileServerPort" f) sessionKey
@@ -78,6 +89,7 @@ server = stat :<|> fsRegister
         else do
           return $ StatResponse "Failure authentication" "" "" "" ""
 
-    fsRegister :: Handler Int
-    fsRegister = liftIO $ do
+    fsRegister :: String -> Handler Int
+    fsRegister str = liftIO $ do
+      -- TODO log this fs as still being alive...
       return 3

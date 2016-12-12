@@ -1,4 +1,4 @@
-test-server:
+fs:
   image: mcnaugho/fs
   environment:
     # The start of active environment variables. Set as needed.
@@ -10,7 +10,7 @@ test-server:
     # - http_proxy=http://www-proxy.scss.tcd.ie:8080
   command: /usr/local/bin/fs-exe
   ports:
-    - "8080:8089"
+    - "8085"
   links:
     - database
 database:

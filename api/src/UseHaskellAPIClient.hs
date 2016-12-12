@@ -24,7 +24,7 @@ dirRestAPI :: Proxy DirAPI
 dirRestAPI = Proxy
 
 stat :: StatRequest -> ClientM StatResponse
-fsRegister :: ClientM Int
+fsRegister :: String -> ClientM Int
 
 (stat :<|> fsRegister) = client dirRestAPI
 

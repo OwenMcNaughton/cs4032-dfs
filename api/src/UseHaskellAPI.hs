@@ -39,11 +39,12 @@ data DownloadRequest = DownloadRequest { encDlqID :: String  -- encrypted with a
                                        } deriving (Show, Generic, FromJSON, ToJSON, ToBSON, FromBSON)
 
 data DownloadResponse = DownloadResponse { encDlrStatus :: String  -- encrypted with session key
-                                         , encContents :: String  -- encrypted with session key
+                                         , encDlqContents :: String  -- encrypted with session key
                                          } deriving (Show, Generic, FromJSON, ToJSON, ToBSON, FromBSON)
 
 data UploadRequest = UploadRequest { encUlqID :: String  -- encrypted with auth secret key
                                    , encUlqSessionkey :: String  -- encrypted with auth secret key
+                                   , encUlqContents :: String  -- encrypted with session key
                                    , ulqTimeout :: Int
                                    } deriving (Show, Generic, FromJSON, ToJSON, ToBSON, FromBSON)
 
@@ -66,7 +67,7 @@ data StatResponse = StatResponse { strStatus :: String
 
 data FileStat = FileStat { fsFullPath :: String
                          , fileID :: String
-                         , fileServerNo :: Int
+                         , fileServerNo :: String
                          , fileServerHost :: String
                          , fileServerPort :: String
                          , owner :: String
@@ -89,7 +90,7 @@ deriving instance ToBSON   Int
 type AuthAPI = "login" :> ReqBody '[JSON] LoginRequest :> Post '[JSON] Token
 
 type DirAPI = "stat" :> ReqBody '[JSON] StatRequest :> Post '[JSON] StatResponse
-  :<|> "fsRegister" :> Get '[JSON] Int
+  :<|> "fsRegister" :> ReqBody '[JSON] String :> Post '[JSON] Int
   -- :<|> "lock" :> ReqBody '[JSON] LockRequest :> Post '[JSON] LockResponse
 
 type FsAPI = "download" :> ReqBody '[JSON] DownloadRequest :> Post '[JSON] DownloadResponse

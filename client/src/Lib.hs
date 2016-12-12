@@ -60,20 +60,25 @@ instance ProcessResponse Token where
 
 instance ProcessResponse DownloadResponse where
   processResponse r p = do
-    putStrLn $ show r
+    let decContents = xcrypt (encDlqContents r) p
+    warnLog decContents
+
+instance ProcessResponse UploadResponse where
+  processResponse r p = do
+    warnLog $ show r
 
 instance ProcessResponse StatResponse where
   processResponse r p = do
     warnLog $ show r
-    let host = xcrypt (encStrServerHost r) p
-    let port = xcrypt (encStrServerPort r) p
+    let host = trimPass (xcrypt (encStrServerHost r) p)
+    let port = trimPass (xcrypt (encStrServerPort r) p)
     warnLog host
     warnLog port
     let fileID = encStrID r
     let fullPath = xcrypt (encFullPath r) p
     let cfs = ClientFileStat fullPath fileID host port
-    withMongoDbConnection $ Database.MongoDB.delete (select ["encFileID" := val fullPath] "FILES")
-    withMongoDbConnection $ upsert (select ["encFileID" := val fullPath] "FILES") (toBSON cfs)
+    withMongoDbConnection $ Database.MongoDB.delete (select ["cfsFullPath" := val fullPath] "FILES")
+    withMongoDbConnection $ upsert (select ["cfsFullPath" := val fullPath] "FILES") (toBSON cfs)
 
 doCall pass f h p = do
   let reply = (SC.runClientM f =<< env h p)
@@ -84,7 +89,7 @@ doLogin = do
   user <- (withMongoDbConnection $ findOne (select [] "USER"))
   case user of
     Nothing -> do
-      putStrLn "Provide a username and password as cmd line args"
+      warnLog "Provide a username and password as cmd line args"
     Just u -> do
       let name = (getMongoString "name" u)
       let pass = (getMongoString "pass" u)
@@ -130,10 +135,31 @@ doDownload fn = do
           let timeout = (getMongoInt "tokenTimeout" t)
           let encDlqSessionKey = (getMongoString "encEncSessionKey" t)
           let sessionKey = (getMongoString "encTokenSessionKey" t)
-          let fileID = show (getMongoString "encFileID" fi)
-          let h = show (getMongoString "host" fi)
-          let p = show (getMongoString "port" fi)
+          let fileID = (getMongoString "encFileID" fi)
+          let h = getMongoString "host" fi
+          let p = getMongoString "port" fi
           doCall sessionKey (download (DownloadRequest fileID encDlqSessionKey timeout)) h p
+
+doUpload :: String -> String -> IO ()
+doUpload fn contents = do
+  token <- (withMongoDbConnection $ findOne (select [] "TOKEN"))
+  case token of
+    Nothing -> do
+      warnLog "Didn't find an access token, did you login?"
+    Just t -> do
+      fileInfo <- withMongoDbConnection $ findOne (select ["cfsFullPath" := val fn] "FILES")
+      case fileInfo of
+        Nothing -> do
+          warnLog "I don't know that file..."
+        Just fi -> do
+          let timeout = (getMongoInt "tokenTimeout" t)
+          let encDlqSessionKey = (getMongoString "encEncSessionKey" t)
+          let sessionKey = (getMongoString "encTokenSessionKey" t)
+          let fileID = (getMongoString "encFileID" fi)
+          let h = getMongoString "host" fi
+          let p = getMongoString "port" fi
+          let encContents = xcrypt contents sessionKey
+          doCall sessionKey (upload (UploadRequest fileID encDlqSessionKey encContents timeout)) h p
 
 setupUser :: IO ()
 setupUser = do
@@ -158,6 +184,10 @@ prompt = do
     then do
       let command = splitOn " " line
       doDownload (head (drop 1 command))
+  else if isPrefixOf "upload" line
+    then do
+      let command = splitOn " " line
+      doUpload (head (drop 1 command)) (head (drop 2 command))
   else
     putStrLn "add"
   prompt
@@ -166,24 +196,4 @@ someFunc :: IO ()
 someFunc = do
   setEnv "MONGODB_IP" "localhost"
   setEnv "MONGODB_DATABASE" "USEHASKELLDB"
-
-  let reply = (SC.runClientM fsRegister =<< env dirHost dirPort)
-  reportExceptionOr' processResponse' reply
-
   prompt
-
-
-
-
-
-reportExceptionOr' act b =  b >>= \ b' ->
-  case b' of
-     Left err -> putStrLn $ "Call failed with error: " ++ show err
-     Right b'' ->  act b''
-
-class ProcessResponse' a where
- processResponse' :: a -> IO ()
-
-instance ProcessResponse' Int where
-  processResponse' r = do
-    warnLog $ show r

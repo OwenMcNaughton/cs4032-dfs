@@ -1,0 +1,5 @@
+#!/bin/bash
+FSDB="fs_database"$1
+FS="fs"$1
+docker run -d --name=$FSDB mongo:3.0.2 &&
+docker run --name=$FS --env=MONGODB_IP=database --env=MONGODB_DATABASE=FS --env=LOG_LEVEL=DEBUG --link=$FSDB -e "fsid=$FS" --publish=8082 mcnaugho/fs /usr/local/bin/fs-exe
