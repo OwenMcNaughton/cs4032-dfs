@@ -23,6 +23,16 @@ login :: LoginRequest -> ClientM Token
 dirRestAPI :: Proxy DirAPI
 dirRestAPI = Proxy
 
-download :: DownloadRequest -> ClientM DownloadResponse
+stat :: StatRequest -> ClientM StatResponse
+fsRegister :: ClientM Int
 
-(download) = client dirRestAPI
+(stat :<|> fsRegister) = client dirRestAPI
+
+
+fsRestAPI :: Proxy FsAPI
+fsRestAPI = Proxy
+
+download :: DownloadRequest -> ClientM DownloadResponse
+upload :: UploadRequest -> ClientM UploadResponse
+
+(download :<|> upload) = client fsRestAPI

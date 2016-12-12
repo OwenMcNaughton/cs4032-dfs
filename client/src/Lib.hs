@@ -1,7 +1,12 @@
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE DataKinds            #-}
+{-# LANGUAGE DeriveAnyClass       #-}
+{-# LANGUAGE DeriveGeneric        #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE StandaloneDeriving   #-}
+{-# LANGUAGE TemplateHaskell      #-}
+{-# LANGUAGE TypeOperators        #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Lib
     ( someFunc
@@ -26,6 +31,9 @@ import           UseHaskellAPIClient
 import           Common
 import           Database.MongoDB
 import           Data.Bson.Generic
+import Network.HTTP.Types.Status
+import Network.Wai.Logger
+import Network.Wai
 
 redCode   = setSGRCode [SetConsoleIntensity BoldIntensity , SetColor Foreground Vivid Red]
 whiteCode = setSGRCode [SetConsoleIntensity BoldIntensity , SetColor Foreground Vivid White]
@@ -44,15 +52,28 @@ instance ProcessResponse Token where
   processResponse r p = do
     warnLog $ show r
     let encTicket = (xcrypt (ticket r) p)
-    let key = (xcrypt (encSessionKey r) p)
+    let key = (xcrypt (encTokenSessionKey r) p)
     let encKey = (xcrypt (encEncSessionKey r) p)
-    let t = Token True encTicket key encKey (timeout r) (serverHost r) (serverPort r)
+    let t = Token True encTicket key encKey (tokenTimeout r) (tokenServerHost r) (tokenServerPort r)
     withMongoDbConnection $ Database.MongoDB.delete (select [] "TOKEN")
     withMongoDbConnection $ upsert (select [] "TOKEN") (toBSON t)
 
 instance ProcessResponse DownloadResponse where
   processResponse r p = do
     putStrLn $ show r
+
+instance ProcessResponse StatResponse where
+  processResponse r p = do
+    warnLog $ show r
+    let host = xcrypt (encStrServerHost r) p
+    let port = xcrypt (encStrServerPort r) p
+    warnLog host
+    warnLog port
+    let fileID = encStrID r
+    let fullPath = xcrypt (encFullPath r) p
+    let cfs = ClientFileStat fullPath fileID host port
+    withMongoDbConnection $ Database.MongoDB.delete (select ["encFileID" := val fullPath] "FILES")
+    withMongoDbConnection $ upsert (select ["encFileID" := val fullPath] "FILES") (toBSON cfs)
 
 doCall pass f h p = do
   let reply = (SC.runClientM f =<< env h p)
@@ -71,8 +92,8 @@ doLogin = do
       let p = authPort
       doCall pass (login (LoginRequest name (xcrypt loginRequestMessage pass))) h p
 
-doDownload :: String -> IO ()
-doDownload fn = do
+doStat :: String -> IO ()
+doStat fn = do
   user <- (withMongoDbConnection $ findOne (select [] "USER"))
   case user of
     Nothing -> do
@@ -82,17 +103,37 @@ doDownload fn = do
       token <- (withMongoDbConnection $ findOne (select [] "TOKEN"))
       case token of
         Nothing -> do
-          putStrLn "Didn't find an access token, did you login?"
+          warnLog "Didn't find an access token, did you login?"
         Just t -> do
-          let h = (getMongoString "serverHost" t)
-          let p = (getMongoString "serverPort" t)
-          let ticket = (getMongoString "ticket" t)
-          let encSessionKey = (getMongoString "encEncSessionKey" t)
-          let timeout3 = (getMongoInt "timeout" t)
-          let sessionKey = (getMongoString "encSessionKey" t)
-          let encUser = xcrypt name sessionKey
+          let h = (getMongoString "tokenServerHost" t)
+          let p = (getMongoString "tokenServerPort" t)
+          let encStqTicket = (getMongoString "ticket" t)
+          let encStqSessionKey = (getMongoString "encEncSessionKey" t)
+          let stqTimeout = (getMongoInt "tokenTimeout" t)
+          let sessionKey = (getMongoString "encTokenSessionKey" t)
+          let encStqUser = xcrypt name sessionKey
           let encFullPath = xcrypt fn sessionKey
-          doCall "" (download (DownloadRequest encUser ticket encSessionKey encFullPath timeout3)) h p
+          doCall sessionKey (stat (StatRequest encStqUser encStqTicket encStqSessionKey encFullPath stqTimeout)) h p
+
+doDownload :: String -> IO ()
+doDownload fn = do
+  token <- (withMongoDbConnection $ findOne (select [] "TOKEN"))
+  case token of
+    Nothing -> do
+      warnLog "Didn't find an access token, did you login?"
+    Just t -> do
+      fileInfo <- withMongoDbConnection $ findOne (select ["cfsFullPath" := val fn] "FILES")
+      case fileInfo of
+        Nothing -> do
+          warnLog "I don't know that file..."
+        Just fi -> do
+          let timeout = (getMongoInt "tokenTimeout" t)
+          let encDlqSessionKey = (getMongoString "encEncSessionKey" t)
+          let sessionKey = (getMongoString "encTokenSessionKey" t)
+          let fileID = show (getMongoString "encFileID" fi)
+          let h = show (getMongoString "host" fi)
+          let p = show (getMongoString "port" fi)
+          doCall sessionKey (download (DownloadRequest fileID encDlqSessionKey timeout)) h p
 
 setupUser :: IO ()
 setupUser = do
@@ -109,21 +150,40 @@ prompt = do
   if isPrefixOf "login" line
     then do
       doLogin
+  else if isPrefixOf "stat" line
+    then do
+      let command = splitOn " " line
+      doStat (head (drop 1 command))
   else if isPrefixOf "download" line
     then do
       let command = splitOn " " line
       doDownload (head (drop 1 command))
   else
-    putStrLn "noono"
+    putStrLn "add"
   prompt
 
 someFunc :: IO ()
 someFunc = do
   setEnv "MONGODB_IP" "localhost"
   setEnv "MONGODB_DATABASE" "USEHASKELLDB"
+
+  let reply = (SC.runClientM fsRegister =<< env dirHost dirPort)
+  reportExceptionOr' processResponse' reply
+
   prompt
 
-env :: String -> String -> IO SC.ClientEnv
-env host port = do
-  manager <- newManager defaultManagerSettings
-  return (SC.ClientEnv manager (SC.BaseUrl SC.Http host (read port :: Int) ""))
+
+
+
+
+reportExceptionOr' act b =  b >>= \ b' ->
+  case b' of
+     Left err -> putStrLn $ "Call failed with error: " ++ show err
+     Right b'' ->  act b''
+
+class ProcessResponse' a where
+ processResponse' :: a -> IO ()
+
+instance ProcessResponse' Int where
+  processResponse' r = do
+    warnLog $ show r

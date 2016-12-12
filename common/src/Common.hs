@@ -15,15 +15,20 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Resource
 import           Data.Bits
 import           Data.Char
+import           Data.Hashable
 import           Data.Time.Clock.POSIX
 import           Data.Time.Clock              (UTCTime(..), getCurrentTime)
 import           Data.Time.Format             (defaultTimeLocale, formatTime)
 import           Data.Text                    (pack, unpack)
+import           Network.HTTP.Client                (defaultManagerSettings,
+                                                     newManager)
 import           Data.UnixTime
 import           Database.MongoDB
 import           Network.Wai.Logger
 import           System.Environment           (getArgs, getProgName, lookupEnv, setEnv)
 import           System.Log.Logger
+import qualified Servant.API                        as SC
+import qualified Servant.Client                     as SC
 
 iso8601 :: UTCTime -> String
 iso8601 = formatTime defaultTimeLocale "%FT%T%q%z"
@@ -126,3 +131,23 @@ dirPort = "8082"
 
 authHost :: String
 authHost = "localhost"
+
+dirHost :: String
+dirHost = "localhost"
+
+myHash :: String -> Int
+myHash s = hash s
+
+myHashMod :: String -> Int -> Int
+myHashMod s m = (hash s) `mod` m
+
+fileServer :: Int -> (String, String)
+fileServer 0 = ("localhost", "8085")
+fileServer 1 = ("localhost", "8086")
+fileServer 2 = ("localhost", "8087")
+fileServer 3 = ("localhost", "8088")
+
+env :: String -> String -> IO SC.ClientEnv
+env host port = do
+  manager <- newManager defaultManagerSettings
+  return (SC.ClientEnv manager (SC.BaseUrl SC.Http host (read port :: Int) ""))

@@ -1,6 +1,7 @@
 server
 dir/.stack-work
 api/.stack-work
+fs/.stack-work
 client/.stack-work
 client/.mongo
 common/.stack-work

@@ -66,6 +66,6 @@ server = login
               let encEncSessionKey = xcrypt (xcrypt (show sessionKey) authServerSecret) password
               let tckt = xcrypt (xcrypt expectedTicket authServerSecret) password
               time <- getPOSIXTime
-              return $ Token True tckt encSessionKey encEncSessionKey ((round time) + 3600) "localhost" dirPort
+              return $ Token True tckt encSessionKey encEncSessionKey ((round time) + 30) "localhost" dirPort
             False ->
               return $ Token False "" "" "" 0 "" ""

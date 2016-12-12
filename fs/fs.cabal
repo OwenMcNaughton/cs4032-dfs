@@ -1,8 +1,8 @@
-name:                common
+name:                fs
 version:             0.1.0.0
 synopsis:            Initial project template from stack
 description:         Please see README.md
-homepage:            https://github.com/githubuser/common#readme
+homepage:            https://github.com/githubuser/fs#readme
 license:             BSD3
 license-file:        LICENSE
 author:              Author name here
@@ -15,40 +15,44 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Lib,
-                       Common
-  build-depends:       base >= 4.7 && < 5,
-                       time,
-                       hslogger,
-                       text,
-                       resourcet,
-                       transformers,
-                       mongoDB,
-                       wai-logger,
-                       unix-time,
-                       hashable,
-                       servant,
-                       servant-client,
-                       http-client
+  exposed-modules:     Lib
+  build-depends:       base >= 4.7 && < 5
+                     , aeson
+                     , bson-generic
+                     , servant-server
+                     , wai
+                     , warp
+                     , common
+                     , use-haskell-api
+                     , transformers
+                     , mongoDB
+                     , time
+                     , random
+                     , directory
+                     , hostname
+                     , servant
+                     , servant-client
+                     , http-types
+                     , wai-logger
   default-language:    Haskell2010
 
-executable common-exe
+executable fs-exe
   hs-source-dirs:      app
   main-is:             Main.hs
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base
-                     , common
+                     , fs
   default-language:    Haskell2010
 
-test-suite common-test
+test-suite fs-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
   build-depends:       base
-                     , common
+                     , fs
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 
 source-repository head
   type:     git
-  location: https://github.com/githubuser/common
+  location: https://github.com/githubuser/fs

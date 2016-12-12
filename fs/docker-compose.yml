@@ -1,16 +1,16 @@
 test-server:
-  image: mcnaugho/auth
+  image: mcnaugho/fs
   environment:
     # The start of active environment variables. Set as needed.
     - MONGODB_IP=database
     # - MONGODB_PORT
-    - MONGODB_DATABASE=DIR
+    - MONGODB_DATABASE=FS
     - LOG_LEVEL=DEBUG
     # - https_proxy=http://www-proxy.scss.tcd.ie:8080
     # - http_proxy=http://www-proxy.scss.tcd.ie:8080
-  command: /usr/local/bin/auth-exe
+  command: /usr/local/bin/fs-exe
   ports:
-    - "8081:8081"
+    - "8080:8089"
   links:
     - database
 database:

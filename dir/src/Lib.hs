@@ -1,6 +1,12 @@
-{-# LANGUAGE DataKinds       #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeOperators   #-}
+{-# LANGUAGE DataKinds            #-}
+{-# LANGUAGE DeriveAnyClass       #-}
+{-# LANGUAGE DeriveGeneric        #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE StandaloneDeriving   #-}
+{-# LANGUAGE TemplateHaskell      #-}
+{-# LANGUAGE TypeOperators        #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Lib
     ( startApp
@@ -35,26 +41,43 @@ api :: Proxy DirAPI
 api = Proxy
 
 server :: Server DirAPI
-server = download
+server = stat :<|> fsRegister
 
   where
-    download :: DownloadRequest -> Handler DownloadResponse
-    download dlq@(DownloadRequest encUser secretTicket encSessionKey encFullPath timeout2) = liftIO $ do
-      if (xcrypt secretTicket authServerSecret) == expectedTicket
+    stat :: StatRequest -> Handler StatResponse
+    stat stq@(StatRequest encStqUser encStqTicket encStqSessionKey encFullPath stqTimeout) = liftIO $ do
+      if (xcrypt encStqTicket authServerSecret) == expectedTicket
         then do
-          let sessionKey = xcrypt encSessionKey authServerSecret
-          let decUser = xcrypt encUser sessionKey
-          let decFullPath = xcrypt encFullPath sessionKey
-          warnLog (decUser ++ " has authorized access to " ++ decFullPath)
+          let sessionKey = xcrypt encStqSessionKey authServerSecret
+          let user = xcrypt encStqUser sessionKey
           currentTime <- getPOSIXTime
-          warnLog ("timeout: " ++ show timeout2)
-          warnLog ("current: " ++ show (round currentTime))
-          if timeout2 > (round currentTime)
+          if stqTimeout > (round currentTime)
             then do
-              warnLog "And his ticket's still valid"
-              return $ DownloadResponse "Success!" "file contents"
+              let fullPath = xcrypt encFullPath sessionKey
+              fileInfo <- (withMongoDbConnection $ findOne $ select ["fsFullPath" =: fullPath] "FILES")
+              warnLog $ show fileInfo
+              case fileInfo of
+                Nothing -> do
+                  let newFileID = myHash fullPath
+                  let nfServerNo = myHashMod fullPath 4
+                  let serverHostPort = fileServer nfServerNo
+                  let newFile = FileStat fullPath (show newFileID) nfServerNo (fst serverHostPort) (snd serverHostPort) user True
+                  withMongoDbConnection $ insert "FILES" (toBSON newFile)
+                  let encFileId = xcrypt (show newFileID) sessionKey
+                  let encHost = xcrypt (fst serverHostPort) sessionKey
+                  let encPort = xcrypt (show $ snd serverHostPort) sessionKey
+                  return $ StatResponse "Success! File created" encFullPath encHost encPort encFileId
+                Just f -> do
+                  let host' = xcrypt (getMongoString "fileServerHost" f) sessionKey
+                  let port' = xcrypt (getMongoString "fileServerPort" f) sessionKey
+                  let fileID' = xcrypt (getMongoString "fileID" f) authServerSecret
+                  return $ StatResponse "Success! File exists" encFullPath host' port' fileID'
             else do
               warnLog "But his ticket timed out..."
-              return $ DownloadResponse "Failure timeout" "file contents"
+              return $ StatResponse "Failure timeout" "" "" "" ""
         else do
-          return $ DownloadResponse "Failure authentication" "?"
+          return $ StatResponse "Failure authentication" "" "" "" ""
+
+    fsRegister :: Handler Int
+    fsRegister = liftIO $ do
+      return 3
