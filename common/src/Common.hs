@@ -109,7 +109,7 @@ authServerSecret :: String
 authServerSecret = "Only the auth server and the directory server know this"
 
 expectedTicket :: String
-expectedTicket = "Hello directory server, this is an authorized request"
+expectedTicket = "Hello, this is an authorized request"
 
 -- Extract the string value of mongodb field
 getMongoString :: Label -> Document -> String
@@ -118,6 +118,9 @@ getMongoString label = typed . (valueAt label)
 -- Extract the string value of mongodb field
 getMongoInt :: Label -> Document -> Int
 getMongoInt label = typed . (valueAt label)
+
+getMongoBool :: Label -> Document -> Bool
+getMongoBool label = typed . (valueAt label)
 
 -- Remove quotes from a string...
 trimPass :: String -> String
@@ -130,10 +133,10 @@ dirPort :: String
 dirPort = "8082"
 
 authHost :: String
-authHost = "localhost"
+authHost = "172.17.0.5"
 
 dirHost :: String
-dirHost = "localhost"
+dirHost = "172.17.0.3"
 
 myHash :: String -> Int
 myHash s = hash s

@@ -60,20 +60,19 @@ instance ProcessResponse Token where
 
 instance ProcessResponse DownloadResponse where
   processResponse r p = do
-    let decContents = xcrypt (encDlqContents r) p
-    warnLog decContents
+    let decStatus = xcrypt (encDlrStatus r) p
+    let decContents = xcrypt (encDlrContents r) p
+    warnLog (decStatus ++ " " ++ decContents)
 
 instance ProcessResponse UploadResponse where
   processResponse r p = do
-    warnLog $ show r
+    warnLog (xcrypt (encUlrStatus r) p)
 
 instance ProcessResponse StatResponse where
   processResponse r p = do
     warnLog $ show r
     let host = trimPass (xcrypt (encStrServerHost r) p)
     let port = trimPass (xcrypt (encStrServerPort r) p)
-    warnLog host
-    warnLog port
     let fileID = encStrID r
     let fullPath = xcrypt (encFullPath r) p
     let cfs = ClientFileStat fullPath fileID host port
@@ -120,6 +119,52 @@ doStat fn = do
           let encFullPath = xcrypt fn sessionKey
           doCall sessionKey (stat (StatRequest encStqUser encStqTicket encStqSessionKey encFullPath stqTimeout)) h p
 
+doLock :: String -> IO ()
+doLock fn = do
+  user <- (withMongoDbConnection $ findOne (select [] "USER"))
+  case user of
+    Nothing -> do
+      putStrLn "Provide a username and password as cmd line args, and then login"
+    Just u -> do
+      let name = (getMongoString "name" u)
+      token <- (withMongoDbConnection $ findOne (select [] "TOKEN"))
+      case token of
+        Nothing -> do
+          warnLog "Didn't find an access token, did you login?"
+        Just t -> do
+          let h = (getMongoString "tokenServerHost" t)
+          let p = (getMongoString "tokenServerPort" t)
+          let encStqTicket = (getMongoString "ticket" t)
+          let encStqSessionKey = (getMongoString "encEncSessionKey" t)
+          let stqTimeout = (getMongoInt "tokenTimeout" t)
+          let sessionKey = (getMongoString "encTokenSessionKey" t)
+          let encStqUser = xcrypt name sessionKey
+          let encFullPath = xcrypt fn sessionKey
+          doCall sessionKey (lock (StatRequest encStqUser encStqTicket encStqSessionKey encFullPath stqTimeout)) h p
+
+doUnlock :: String -> IO ()
+doUnlock fn = do
+  user <- (withMongoDbConnection $ findOne (select [] "USER"))
+  case user of
+    Nothing -> do
+      putStrLn "Provide a username and password as cmd line args, and then login"
+    Just u -> do
+      let name = (getMongoString "name" u)
+      token <- (withMongoDbConnection $ findOne (select [] "TOKEN"))
+      case token of
+        Nothing -> do
+          warnLog "Didn't find an access token, did you login?"
+        Just t -> do
+          let h = (getMongoString "tokenServerHost" t)
+          let p = (getMongoString "tokenServerPort" t)
+          let encStqTicket = (getMongoString "ticket" t)
+          let encStqSessionKey = (getMongoString "encEncSessionKey" t)
+          let stqTimeout = (getMongoInt "tokenTimeout" t)
+          let sessionKey = (getMongoString "encTokenSessionKey" t)
+          let encStqUser = xcrypt name sessionKey
+          let encFullPath = xcrypt fn sessionKey
+          doCall sessionKey (unlock (StatRequest encStqUser encStqTicket encStqSessionKey encFullPath stqTimeout)) h p
+
 doDownload :: String -> IO ()
 doDownload fn = do
   token <- (withMongoDbConnection $ findOne (select [] "TOKEN"))
@@ -142,24 +187,31 @@ doDownload fn = do
 
 doUpload :: String -> String -> IO ()
 doUpload fn contents = do
-  token <- (withMongoDbConnection $ findOne (select [] "TOKEN"))
-  case token of
+  user <- (withMongoDbConnection $ findOne (select [] "USER"))
+  case user of
     Nothing -> do
-      warnLog "Didn't find an access token, did you login?"
-    Just t -> do
-      fileInfo <- withMongoDbConnection $ findOne (select ["cfsFullPath" := val fn] "FILES")
-      case fileInfo of
+      putStrLn "Provide a username and password as cmd line args, and then login"
+    Just u -> do
+      let name = (getMongoString "name" u)
+      token <- (withMongoDbConnection $ findOne (select [] "TOKEN"))
+      case token of
         Nothing -> do
-          warnLog "I don't know that file..."
-        Just fi -> do
-          let timeout = (getMongoInt "tokenTimeout" t)
-          let encDlqSessionKey = (getMongoString "encEncSessionKey" t)
-          let sessionKey = (getMongoString "encTokenSessionKey" t)
-          let fileID = (getMongoString "encFileID" fi)
-          let h = getMongoString "host" fi
-          let p = getMongoString "port" fi
-          let encContents = xcrypt contents sessionKey
-          doCall sessionKey (upload (UploadRequest fileID encDlqSessionKey encContents timeout)) h p
+          warnLog "Didn't find an access token, did you login?"
+        Just t -> do
+          fileInfo <- withMongoDbConnection $ findOne (select ["cfsFullPath" := val fn] "FILES")
+          case fileInfo of
+            Nothing -> do
+              warnLog "I don't know that file..."
+            Just fi -> do
+              let timeout = (getMongoInt "tokenTimeout" t)
+              let encDlqSessionKey = (getMongoString "encEncSessionKey" t)
+              let sessionKey = (getMongoString "encTokenSessionKey" t)
+              let fileID = (getMongoString "encFileID" fi)
+              let h = getMongoString "host" fi
+              let p = getMongoString "port" fi
+              let encUser = xcrypt name sessionKey
+              let encContents = xcrypt contents sessionKey
+              doCall sessionKey (upload (UploadRequest fileID encUser encDlqSessionKey encContents timeout)) h p
 
 setupUser :: IO ()
 setupUser = do
@@ -170,7 +222,6 @@ setupUser = do
 
 prompt :: IO ()
 prompt = do
-  setupUser
   putStrLn "Ready."
   line <- getLine
   if isPrefixOf "login" line
@@ -188,6 +239,14 @@ prompt = do
     then do
       let command = splitOn " " line
       doUpload (head (drop 1 command)) (head (drop 2 command))
+  else if isPrefixOf "lock" line
+    then do
+      let command = splitOn " " line
+      doLock (head (drop 1 command))
+  else if isPrefixOf "unlock" line
+    then do
+      let command = splitOn " " line
+      doUnlock (head (drop 1 command))
   else
     putStrLn "add"
   prompt
@@ -196,4 +255,5 @@ someFunc :: IO ()
 someFunc = do
   setEnv "MONGODB_IP" "localhost"
   setEnv "MONGODB_DATABASE" "USEHASKELLDB"
+  setupUser
   prompt

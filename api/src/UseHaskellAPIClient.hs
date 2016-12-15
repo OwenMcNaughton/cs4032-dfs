@@ -25,8 +25,10 @@ dirRestAPI = Proxy
 
 stat :: StatRequest -> ClientM StatResponse
 fsRegister :: String -> ClientM Int
+lock :: StatRequest -> ClientM StatResponse
+unlock :: StatRequest -> ClientM StatResponse
 
-(stat :<|> fsRegister) = client dirRestAPI
+(stat :<|> fsRegister :<|> lock :<|> unlock) = client dirRestAPI
 
 
 fsRestAPI :: Proxy FsAPI
@@ -34,5 +36,7 @@ fsRestAPI = Proxy
 
 download :: DownloadRequest -> ClientM DownloadResponse
 upload :: UploadRequest -> ClientM UploadResponse
+fslock :: StatRequest -> ClientM Int
+fsunlock :: StatRequest -> ClientM Int
 
-(download :<|> upload) = client fsRestAPI
+(download :<|> upload :<|> fslock :<|> fsunlock) = client fsRestAPI

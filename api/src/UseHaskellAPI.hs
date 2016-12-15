@@ -39,10 +39,11 @@ data DownloadRequest = DownloadRequest { encDlqID :: String  -- encrypted with a
                                        } deriving (Show, Generic, FromJSON, ToJSON, ToBSON, FromBSON)
 
 data DownloadResponse = DownloadResponse { encDlrStatus :: String  -- encrypted with session key
-                                         , encDlqContents :: String  -- encrypted with session key
+                                         , encDlrContents :: String  -- encrypted with session key
                                          } deriving (Show, Generic, FromJSON, ToJSON, ToBSON, FromBSON)
 
 data UploadRequest = UploadRequest { encUlqID :: String  -- encrypted with auth secret key
+                                   , encUlqUser :: String -- encrypted with session key
                                    , encUlqSessionkey :: String  -- encrypted with auth secret key
                                    , encUlqContents :: String  -- encrypted with session key
                                    , ulqTimeout :: Int
@@ -61,7 +62,7 @@ data StatRequest = StatRequest { encStqUser :: String  -- encrypted with session
 data StatResponse = StatResponse { strStatus :: String
                                  , encFullPath :: String  --  encrypted with session key
                                  , encStrServerHost :: String  -- encrypted with session key
-                                 , encStrServerPort :: String  -- encrypted with sessionk key
+                                 , encStrServerPort :: String  -- encrypted with session key
                                  , encStrID :: String  -- encrypted with auth secret key
                                  } deriving (Show, Generic, FromJSON, ToJSON, ToBSON, FromBSON)
 
@@ -70,8 +71,8 @@ data FileStat = FileStat { fsFullPath :: String
                          , fileServerNo :: String
                          , fileServerHost :: String
                          , fileServerPort :: String
-                         , owner :: String
-                         , private:: Bool
+                         , locked :: Bool
+                         , lockedBy :: String
                          } deriving (Show, Generic, FromJSON, ToJSON, ToBSON, FromBSON)
 
 data ClientFileStat = ClientFileStat { cfsFullPath :: String
@@ -91,7 +92,10 @@ type AuthAPI = "login" :> ReqBody '[JSON] LoginRequest :> Post '[JSON] Token
 
 type DirAPI = "stat" :> ReqBody '[JSON] StatRequest :> Post '[JSON] StatResponse
   :<|> "fsRegister" :> ReqBody '[JSON] String :> Post '[JSON] Int
-  -- :<|> "lock" :> ReqBody '[JSON] LockRequest :> Post '[JSON] LockResponse
+  :<|> "lock" :> ReqBody '[JSON] StatRequest :> Post '[JSON] StatResponse
+  :<|> "unlock" :> ReqBody '[JSON] StatRequest :> Post '[JSON] StatResponse
 
 type FsAPI = "download" :> ReqBody '[JSON] DownloadRequest :> Post '[JSON] DownloadResponse
   :<|> "upload" :> ReqBody '[JSON] UploadRequest :> Post '[JSON] UploadResponse
+  :<|> "fslock" :> ReqBody '[JSON] StatRequest :> Post '[JSON] Int
+  :<|> "fsunlock" :> ReqBody '[JSON] StatRequest :> Post '[JSON] Int

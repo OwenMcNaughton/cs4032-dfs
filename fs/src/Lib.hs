@@ -82,7 +82,7 @@ api :: Proxy FsAPI
 api = Proxy
 
 server :: Server FsAPI
-server = download :<|> upload
+server = download :<|> upload :<|> fslock :<|> fsunlock
 
   where
     download :: DownloadRequest -> Handler DownloadResponse
@@ -94,22 +94,47 @@ server = download :<|> upload
           let decID = xcrypt encDlqID authServerSecret
           contents <- readFile ("files/" ++ decID)
           warnLog contents
-          return $ DownloadResponse "Success!" (xcrypt contents sessionKey)
+          return $ DownloadResponse (xcrypt "Success!" sessionKey) (xcrypt contents sessionKey)
         else do
           warnLog "But his ticket timed out..."
-          return $ DownloadResponse "Failure timeout" ""
+          return $ DownloadResponse (xcrypt "Failure: Timeout" sessionKey) ""
 
     upload :: UploadRequest -> Handler UploadResponse
-    upload ulq@(UploadRequest encUlqID encUlqSessionkey ulqEncContents ulqTimeout) = liftIO $ do
+    upload ulq@(UploadRequest encUlqID encUlqUser encUlqSessionkey ulqEncContents ulqTimeout) = liftIO $ do
       let sessionKey = xcrypt encUlqSessionkey authServerSecret
+      let decUser = xcrypt encUlqUser sessionKey
       currentTime <- getPOSIXTime
       if ulqTimeout > (round currentTime)
         then do
           let decID = xcrypt encUlqID authServerSecret
           let contents = xcrypt ulqEncContents sessionKey
           writeFile ("files/" ++ decID) contents
-          return $ UploadResponse "Success!"
+          return $ UploadResponse (xcrypt "Success!" sessionKey)
         else do
-          warnLog "Ticket has timed out"
-          return $ UploadResponse "Failure timeout"
-      return $ UploadResponse "Success!"
+          warnLog "ad"
+          return $ UploadResponse (xcrypt "Failure: Timeout" sessionKey)
+
+    fslock :: StatRequest -> Handler Int
+    fslock stq@(StatRequest encStqUser encStqTicket encStqSessionKey encFullPath stqTimeout) = liftIO $ do
+      let ticket = xcrypt encStqTicket authServerSecret
+      if ticket == expectedTicket
+        then do
+          let fileID = xcrypt encFullPath authServerSecret
+          let user = xcrypt encStqUser authServerSecret
+          let lockedFile = FileStat fileID "" "" "" "" True user
+          withMongoDbConnection $ upsert (select ["fsFullPath" := val fileID] "FILES") (toBSON lockedFile)
+          return 1
+        else do
+          return 0
+
+    fsunlock :: StatRequest -> Handler Int
+    fsunlock stq@(StatRequest encStqUser encStqTicket encStqSessionKey encFullPath stqTimeout) = liftIO $ do
+      let ticket = xcrypt encStqTicket authServerSecret
+      if ticket == expectedTicket
+        then do
+          let fileID = xcrypt encFullPath authServerSecret
+          let unlockedFile = FileStat fileID "" "" "" "" False ""
+          withMongoDbConnection $ upsert (select ["fsFullPath" := val fileID] "FILES") (toBSON unlockedFile)
+          return 1
+        else do
+          return 0
