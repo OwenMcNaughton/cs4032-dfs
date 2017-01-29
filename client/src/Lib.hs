@@ -167,23 +167,30 @@ doUnlock fn = do
 
 doDownload :: String -> IO ()
 doDownload fn = do
-  token <- (withMongoDbConnection $ findOne (select [] "TOKEN"))
-  case token of
+  user <- (withMongoDbConnection $ findOne (select [] "USER"))
+  case user of
     Nothing -> do
-      warnLog "Didn't find an access token, did you login?"
-    Just t -> do
-      fileInfo <- withMongoDbConnection $ findOne (select ["cfsFullPath" := val fn] "FILES")
-      case fileInfo of
+      putStrLn "Provide a username and password as cmd line args, and then login"
+    Just u -> do
+      let name = (getMongoString "name" u)
+      token <- (withMongoDbConnection $ findOne (select [] "TOKEN"))
+      case token of
         Nothing -> do
-          warnLog "I don't know that file..."
-        Just fi -> do
-          let timeout = (getMongoInt "tokenTimeout" t)
-          let encDlqSessionKey = (getMongoString "encEncSessionKey" t)
-          let sessionKey = (getMongoString "encTokenSessionKey" t)
-          let fileID = (getMongoString "encFileID" fi)
-          let h = getMongoString "host" fi
-          let p = getMongoString "port" fi
-          doCall sessionKey (download (DownloadRequest fileID encDlqSessionKey timeout)) h p
+          warnLog "Didn't find an access token, did you login?"
+        Just t -> do
+          fileInfo <- withMongoDbConnection $ findOne (select ["cfsFullPath" := val fn] "FILES")
+          case fileInfo of
+            Nothing -> do
+              warnLog "I don't know that file..."
+            Just fi -> do
+              let timeout = (getMongoInt "tokenTimeout" t)
+              let encDlqSessionKey = (getMongoString "encEncSessionKey" t)
+              let sessionKey = (getMongoString "encTokenSessionKey" t)
+              let fileID = (getMongoString "encFileID" fi)
+              let h = getMongoString "host" fi
+              let p = getMongoString "port" fi
+              let encUser = xcrypt name sessionKey
+              doCall sessionKey (download (DownloadRequest fileID encUser encDlqSessionKey timeout)) h p
 
 doUpload :: String -> String -> IO ()
 doUpload fn contents = do

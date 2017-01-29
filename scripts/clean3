@@ -1,0 +1,7 @@
+docker images --filter dangling=true -q | sort -u | xargs docker rmi ;
+docker volume rm $(docker volume ls -qf dangling=true) ;
+sudo docker ps -a | grep Exit | cut -d ' ' -f 1 | xargs sudo docker rm ;
+docker stop fs_database0 ; docker rm fs_database0 ;
+docker stop fs_database1 ; docker rm fs_database1 ;
+docker stop fs_database2 ; docker rm fs_database2 ;
+docker stop fs_database3 ; docker rm fs_database3

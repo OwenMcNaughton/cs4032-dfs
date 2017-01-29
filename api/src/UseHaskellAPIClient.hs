@@ -36,7 +36,8 @@ fsRestAPI = Proxy
 
 download :: DownloadRequest -> ClientM DownloadResponse
 upload :: UploadRequest -> ClientM UploadResponse
+touch :: UploadRequest -> ClientM Int
 fslock :: StatRequest -> ClientM Int
 fsunlock :: StatRequest -> ClientM Int
 
-(download :<|> upload :<|> fslock :<|> fsunlock) = client fsRestAPI
+(download :<|> upload :<|> touch :<|> fslock :<|> fsunlock) = client fsRestAPI

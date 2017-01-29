@@ -34,6 +34,7 @@ data Token = Token { success :: Bool
                    } deriving (Show, Generic, FromJSON, ToJSON, ToBSON, FromBSON)
 
 data DownloadRequest = DownloadRequest { encDlqID :: String  -- encrypted with auth secret key
+                                       , encDlqUser :: String -- encrypted with session key
                                        , encDlqSessionkey :: String  -- encrypted with auth secret key
                                        , dlqTimeout :: Int
                                        } deriving (Show, Generic, FromJSON, ToJSON, ToBSON, FromBSON)
@@ -97,5 +98,6 @@ type DirAPI = "stat" :> ReqBody '[JSON] StatRequest :> Post '[JSON] StatResponse
 
 type FsAPI = "download" :> ReqBody '[JSON] DownloadRequest :> Post '[JSON] DownloadResponse
   :<|> "upload" :> ReqBody '[JSON] UploadRequest :> Post '[JSON] UploadResponse
+  :<|> "touch" :> ReqBody '[JSON] UploadRequest :> Post '[JSON] Int
   :<|> "fslock" :> ReqBody '[JSON] StatRequest :> Post '[JSON] Int
   :<|> "fsunlock" :> ReqBody '[JSON] StatRequest :> Post '[JSON] Int

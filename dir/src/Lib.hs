@@ -28,6 +28,7 @@ import Data.Bson.Generic
 import System.Random
 import qualified Servant.API                        as SC
 import qualified Servant.Client                     as SC
+import           Control.Concurrent           (forkIO, threadDelay)
 
 reportExceptionOr act b =  b >>= \ b' ->
   case b' of
@@ -68,8 +69,8 @@ doLock fullPath user = do
       let p = trimPass (getMongoString "port" nfs)
       let encTick = xcrypt expectedTicket authServerSecret
       let encUser = xcrypt user authServerSecret
-      let stq = StatRequest encTick encUser "" (xcrypt (show fileID) authServerSecret) 0
-      let f = fsunlock stq
+      let stq = StatRequest encUser encTick "" (xcrypt (show fileID) authServerSecret) 0
+      let f = fslock stq
       let reply = (SC.runClientM f =<< env h p)
       reportExceptionOr processResponse reply
 
@@ -85,10 +86,24 @@ doUnlock fullPath = do
       let h = trimPass (getMongoString "host" nfs)
       let p = trimPass (getMongoString "port" nfs)
       let encTick = xcrypt expectedTicket authServerSecret
-      let stq = StatRequest encTick "" "" (xcrypt (show fileID) authServerSecret) 0
+      let stq = StatRequest "" encTick "" (xcrypt (show fileID) authServerSecret) 0
       let f = fsunlock stq
-      warnLog h
-      warnLog p
+      let reply = (SC.runClientM f =<< env h p)
+      reportExceptionOr processResponse reply
+
+doTouch :: String -> IO ()
+doTouch fullPath = do
+  let fileID = myHash fullPath
+  let nfServerNo = "fs" ++ (show (myHashMod fullPath 4))
+  nfServer <- (withMongoDbConnection $ findOne $ select ["no" := val (show nfServerNo)] "SERVERS")
+  case nfServer of
+    Nothing -> do
+      warnLog "uh oh"
+    Just nfs -> do
+      let h = trimPass (getMongoString "host" nfs)
+      let p = trimPass (getMongoString "port" nfs)
+      let ulq = UploadRequest (xcrypt (show fileID) authServerSecret) "" "" "" 0
+      let f = touch ulq
       let reply = (SC.runClientM f =<< env h p)
       reportExceptionOr processResponse reply
 
@@ -130,7 +145,7 @@ server = stat :<|> fsRegister :<|> lock :<|> unlock
                       let encFileId = xcrypt (show newFileID) authServerSecret
                       let encHost = xcrypt (getMongoString "host" nfs) sessionKey
                       let encPort = xcrypt (getMongoString "port" nfs) sessionKey
-                      doUnlock fullPath
+                      doTouch fullPath
                       return $ StatResponse "Success! File created" encFullPath encHost encPort encFileId
                 Just f -> do
                   let host' = xcrypt (getMongoString "fileServerHost" f) sessionKey

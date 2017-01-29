@@ -34,6 +34,7 @@ library
                      , servant-client
                      , http-types
                      , wai-logger
+                     , split
   default-language:    Haskell2010
 
 executable fs-exe
